@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Task List</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 10px; }
+        #status { font-weight: bold; margin-bottom: 15px; }
+        .connected { color: green; }
+        .disconnected { color: red; }
+        .task-list { list-style: none; padding: 0; }
+        .task-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #ccc; }
+        .completed { text-decoration: line-through; color: gray; }
+        input[type="text"] { width: 70%; padding: 8px; }
+        button { padding: 8px 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h2>My Task List</h2>
+    <div id="status" class="disconnected">Status: Disconnected</div>
+
+    <div>
+        <input type="text" id="taskInput" placeholder="New task...">
+        <button onclick="addTask()">Add Task</button>
+    </div>
+
+    <ul id="taskList" class="task-list"></ul>
+
+    <script>
+        const ws = new WebSocket("ws://localhost:8765");
+        const statusDiv = document.getElementById("status");
+        const taskList = document.getElementById("taskList");
+        const taskInput = document.getElementById("taskInput");
+
+        ws.onopen = () => {
+            statusDiv.textContent = "Status: Connected";
+            statusDiv.className = "connected";
+            ws.send(JSON.stringify({ action: "get_tasks" }));
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === "tasks_update") {
+                renderTasks(data.tasks);
+            }
+        };
+
+        ws.onclose = () => {
+            statusDiv.textContent = "Status: Disconnected";
+            statusDiv.className = "disconnected";
+        };
+
+        function addTask() {
+            const title = taskInput.value.trim();
+            if (title) {
+                const message = { action: "add_task", title: title };
+                ws.send(JSON.stringify(message));
+                taskInput.value = "";
+            }
+        }
+
+        function toggleStatus(id, currentStatus) {
+            const newStatus = currentStatus === "active" ? "completed" : "active";
+            const message = { action: "update_task", task_id: id, status: newStatus };
+            ws.send(JSON.stringify(message));
+        }
+
+        function renderTasks(tasks) {
+            taskList.innerHTML = "";
+            tasks.forEach(task => {
+                const li = document.createElement("li");
+                li.className = "task-item";
+                
+                const titleSpan = document.createElement("span");
+                titleSpan.textContent = task.title;
+                if (task.status === "completed") {
+                    titleSpan.className = "completed";
+                }
+                
+                const btn = document.createElement("button");
+                btn.textContent = task.status === "active" ? "Complete" : "Restore";
+                btn.onclick = () => toggleStatus(task.id, task.status);
+
+                li.appendChild(titleSpan);
+                li.appendChild(btn);
+                taskList.appendChild(li);
+            });
+        }
+    </script>
+</body>
+</html>
